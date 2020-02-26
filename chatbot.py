@@ -99,12 +99,13 @@ class Chatbot:
         else:
             response = "I processed {} in starter mode!!".format(line)
             fixedLine = self.preprocess(line)
+            print("fixed line", fixedLine)
             user_movies = self.extract_titles(fixedLine)
+            print("user movies: ", user_movies)
             foundMovies = []
             for m in user_movies:
             	foundMovies.extend(self.find_movies_by_title(m))
-            	# print(self.find_movies_by_title(m))
-            print(foundMovies)
+            print("found movies: ",foundMovies)
 
         #############################################################################
         #                             END OF YOUR CODE                              #
@@ -137,8 +138,8 @@ class Chatbot:
        	normed_line = ""
        	for word in text.split():
        		word = word.lower()
-       		normed_line += word
-       	return normed_line
+       		normed_line += word + " "
+       	return normed_line.strip()
 
 
 
@@ -171,19 +172,25 @@ class Chatbot:
         	# '"([\w ]+\'\w?)"' ,
         	# '"([\w ]+)"' ,
         	# '"([\w]+[\'][\w]+)"'
-        	# '"([^"]*)"'
-        	'"(.*?)"'
-        	
-
+        	'"([^"]*)"'
         ]
 
         movies = []
         for p in patterns:
         	matches = re.findall(p, preprocessed_input)
-        	print("matches", matches)
         	movies.extend(matches)
-        	print("movies", movies)
-        return movies
+
+        fixedMovies = []
+        for m in movies:
+        	fixedMovies.append(self.removeYearHelper(m))
+        return fixedMovies
+
+    def removeYearHelper(self, input_movie):
+    	p = '(\([0-9]{4}\))'
+    	c = re.search(p, input_movie)
+    	if c != None:
+    		input_movie = input_movie.replace(c.group(1), '')
+    	return input_movie
 
     def find_movies_by_title(self, title):
         """ Given a movie title, return a list of indices of matching movies.

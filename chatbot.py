@@ -6,6 +6,7 @@ import movielens
 
 import numpy as np
 import re
+from collections import Counter
 
 
 # noinspection PyMethodMayBeStatic
@@ -24,7 +25,9 @@ class Chatbot:
 		self.titles, ratings = movielens.ratings()
 		self.sentiment = movielens.sentiment()
 		self.articles = ["the", "a", "an"]
-		self.movieToYear = {}
+		self.movieToYear = {} # movie title -> year
+		self.recommends = {} # score -> movie index   (only k entries)
+		self.userSentiment = {} # movie index -> sentiment
 
 		#############################################################################
 		# TODO: Binarize the movie ratings matrix.                                  #
@@ -34,7 +37,7 @@ class Chatbot:
 		# print(ratings[0])
 		self.ratings = self.binarize(ratings, threshold=2.5)
 		# print(self.ratings[0])
-		
+
 		#############################################################################
 		#                             END OF YOUR CODE                              #
 		#############################################################################
@@ -104,6 +107,7 @@ class Chatbot:
 		else:
 			response = "I processed {} in starter mode!!".format(line)
 			fixedLine = self.preprocess(line)
+			sentiment_val = self.extract_sentiment(fixedLine)
 			print("fixed line: ", fixedLine)
 			user_movies = self.extract_titles(fixedLine)
 			print("user movies: ", user_movies)
@@ -111,6 +115,10 @@ class Chatbot:
 			for m in user_movies:
 				foundMovies.extend(self.find_movies_by_title(m))
 			print("found movies: ",foundMovies)
+			print("sentiment: ", sentiment_val)
+			user_matrix = np.zeros((self.ratings.shape[0], 1))
+			print(user_matrix)
+			print(user_matrix.shape)
 
 		#############################################################################
 		#                             END OF YOUR CODE                              #
@@ -197,6 +205,7 @@ class Chatbot:
 		year = self.checkYearHelper(input_movie)
 		if year != None:
 			input_movie = input_movie.replace(year, '')  #remove year
+			input_movie = input_movie.strip()
 		input_movie = self.fixedTitles(input_movie)  #Rearranges first article word
 		if year != None:
 			self.movieToYear[input_movie] = year
@@ -251,25 +260,135 @@ class Chatbot:
 		return movies
 
 
+
+
+	def removeTitleHelper(self, input_text):
+		patterns = '(".*")'
+		input_text = re.sub(patterns, '', input_text)
+		return input_text
+
+	def removePunctuationHelper(self, input_text):
+		patterns = '([\.,!\?;])'
+		input_text = re.sub(patterns, '', input_text)
+		return input_text
+
 	def extract_sentiment(self, preprocessed_input):
 		"""Extract a sentiment rating from a line of pre-processed text.
-
 		You should return -1 if the sentiment of the text is negative, 0 if the
 		sentiment of the text is neutral (no sentiment detected), or +1 if the
 		sentiment of the text is positive.
-
 		As an optional creative extension, return -2 if the sentiment of the text
 		is super negative and +2 if the sentiment of the text is super positive.
-
 		Example:
 		  sentiment = chatbot.extract_sentiment(chatbot.preprocess('I liked "The Titanic"'))
 		  print(sentiment) // prints 1
-
 		:param preprocessed_input: a user-supplied line of text that has been pre-processed with preprocess()
 		:returns: a numerical value for the sentiment of the text
 		"""
 		negationFlag = False
-		return 0
+		posCount = 0
+		negCount = 0
+
+		# remove titles from input
+		input_text = self.removeTitleHelper(preprocessed_input)
+		input_text = self.removePunctuationHelper(input_text)
+
+		print(input_text)
+
+		# count pos and neg words in the input
+		input_list = input_text.split()
+		for word in input_list:
+			value = self.checkLexicon(word)
+			if value == 'pos':
+				posCount += 1
+			elif value == 'neg':
+				negCount += 1
+			"""print("word", word)
+			print("pos count: ", posCount)
+			print("neg count: ", negCount)
+			print()
+		print("===")"""
+		
+		# modify pos and neg counts depending on negation words
+		negated_list = self.checkNegation(input_text)
+		for negated_word in negated_list:
+			value = self.checkLexicon(negated_word)
+			# print("negated word: ", negated_word)
+			# print("value: ", value)
+			if value == 'pos':
+				posCount -= 1
+				negCount += 1
+			elif value == 'neg':
+				negCount -= 1
+				posCount += 1
+			# print("pos count: ", posCount)
+			# print("neg count: ", negCount)
+
+		# print("final pos count: ", posCount)
+		# print("final neg count: ", negCount)
+		if posCount > negCount:
+			return 1
+		elif negCount > posCount:
+			return -1
+		else:
+			return 0
+
+	def checkNegation(self, input_text):
+		""" 
+		Returns a list of words that would be negated and whose sentiments should
+		be reversed.
+		"""
+		patterns = [
+			'n\'t (.*) ',
+			'n\'t really (.*) ',
+			'not (.*) ',
+			'not really (.*) ',
+			'never (.*) '
+		]
+
+		to_negate = []
+		for p in patterns:
+			matches = re.findall(p, input_text)
+			for match in matches:
+				print(match)
+				to_negate.append(match)
+
+		return to_negate
+
+
+	def checkLexicon(self, word):
+		""" 
+		Checks if the sentiment lexicon contains the word (or other forms of the word, i.e. singular,
+		present tense, etc.) and 
+		- returns 'pos' for positive words
+		- returns 'neg' for negative words
+		- returns 'none' for words not in the sentiment lexicon
+		"""
+		forms = []
+		value = 'none'
+		forms.append(word)
+
+		# check last letter
+		if word[-1:] == "s" or word[-1:] == "d":
+			forms.append(word[0:len(word)-1]) # likes -> like, liked -> like
+
+		# check last 2 letters
+		if word[-2:] == "ed":
+			forms.append(word[0:len(word)-2]) # enjoyed -> enjoy
+
+		# check last 3 letters
+		if word[-3:] == "ing":
+			forms.append(word[0:len(word)-3]) # enjoying -> enjoy
+
+		forms.append(word + "s") # like -> likes
+		forms.append(word + "d") # like -> liked
+		forms.append(word + "ed") # enjoy -> enjoyed
+
+		for form in forms:
+			if form in self.sentiment:
+				value = self.sentiment[form]
+
+		return value
 
 	def extract_sentiment_for_movies(self, preprocessed_input):
 		"""Creative Feature: Extracts the sentiments from a line of pre-processed text
@@ -391,6 +510,16 @@ class Chatbot:
 		#############################################################################
 		return similarity
 
+
+
+	# Creates and returns sparse vector of user sentiments to given movies
+	def createUserMatrix(self):
+		user_matrix = np.zeros((self.ratings.shape[0], 1))
+		for key, value in self.userSentiment.items():
+			user_matrix[key] = value
+		return user_matrix
+
+
 	def recommend(self, user_ratings, ratings_matrix, k=10, creative=False):
 		"""Generate a list of indices of movies to recommend using collaborative filtering.
 
@@ -423,6 +552,24 @@ class Chatbot:
 
 		# Populate this list with k movie indices to recommend to the user.
 		recommendations = []
+		rec = {} # movie index -> scores
+		for index, row in enumerate(self.ratings):
+			if index not in self.userSentiment:
+				score = 0
+				for key,value in self.userSentiment.items():
+					sim = self.similarity(self.ratings[key], row)
+					score += sim * value
+				rec[index] = score
+		rec_sort = Counter(rec)
+		high = rec_sort.most_common(k)
+		for key in high:
+			recommendations.append(key)
+
+		# Ask for 5 movies -> fill in sentiment for those indexes in sparse user/movie vector
+		# Cosine sim each missing movie with rows of 5 movies that user gave input on
+		# Compute given user rating * sim = score for each given movie
+		# Store in dict score -> index of movie  ----> Keep highest k scores
+
 
 		#############################################################################
 		#                             END OF YOUR CODE                              #

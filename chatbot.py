@@ -53,9 +53,7 @@ class Chatbot:
 		# TODO: Write a short greeting message                                      #
 		#############################################################################
 
-		greeting_message =  "Hi! I'm MovieBot! I'm going to recommend a movie to you.  \
-		First I will ask you about your taste in movies. Tell me about a movie that you \
-		have seen."
+		greeting_message =  "Hi! I'm MovieBot! I'm going to recommend a movie to you. First I will ask you about your taste in movies. Tell me about a movie that you have seen. I need 5 preferences recommendations"
 
 		#############################################################################
 		#                             END OF YOUR CODE                              #
@@ -108,10 +106,23 @@ class Chatbot:
 
 
 		else:
+			#STARTER SECTION
+
 			response = "I processed {} in starter mode!!".format(line) #Inserts line for {}
-			# processed_line = self.preprocess(line)
-			sentiment_val = self.extract_sentiment(line)
+
+
 			extracted_movies = self.extract_titles(line)
+			if len(extracted_movies) == 0:
+				response = "Sorry, I don't understand. Tell me about a movie that you have seen."
+				return response
+
+			if len(extracted_movies) > 1:
+				response = "Please tell me about one movie at a time. Go ahead."
+				return response
+
+			sentiment_val = self.extract_sentiment(line)
+			extracted_movie = extracted_movies[0]
+
 			found_movies = []
 			for m in extracted_movies:
 				title = self.buildUserDict(m)
@@ -120,6 +131,19 @@ class Chatbot:
 			for m in found_movies:
 				self.userSentiment[m] = sentiment_val
 
+			if len(found_movies) == 0:
+				response = "I'm sorry, I haven't heard about that movie before. Please give me another movie."
+				return
+
+			sentiment = self.extract_sentiment(line)
+			if sentiment == 0:
+				return "Hmmm, I couldn't tell if you liked \"" + extracted_movie + "\". Can you tell me more about " + extracted_movie + "?"
+			elif sentiment == 1:
+				response = "Nice, I'm glad you liked \"" + extracted_movie + "\"! It sounds like an awesome movie! " + "I'll definitely check it out some time."
+			elif sentiment == -1:
+				response = "Ugh, I'm sorry you didn't like \"" + extracted_movie + "\". It sounds like a terrible movie! " + "I'll make sure to avoid that one, for sure."
+
+
 			self.count += 1
 			self.movieToYear = {}
 
@@ -127,12 +151,17 @@ class Chatbot:
 			print("found movies: ",found_movies)
 			print("sentiment: ", sentiment_val)
 
+			response += " Thanks for sharing that with me! Please give me another movie."
+
 			if self.count == 6:
 				user_matrix = self.createUserMatrix()
 				recommendations = self.recommend(user_matrix, self.ratings, 5, creative=False)
-				print(recommendations)
+				print(response)
+				response = "That's enough for me to make a recommendation. I suggest you watch " + self.titles[recommendations[0]][0] + ". Would you like to hear another recommendation? (Or enter :quit if you're done.)"
+				print("recommendations", recommendations)
 				self.count = 0
 
+			
 
 
 
@@ -182,11 +211,12 @@ class Chatbot:
 
 		# Split sentence by word and convert to list
 		# Lowercase all letters/words
-		normed_line = ""
-		for word in text.split():
-			word = word.lower()
-			normed_line += word + " "
-		return normed_line.strip()
+		# normed_line = ""
+		# for word in text.split():
+		# 	word = word.lower()
+		# 	normed_line += word + " "
+		# return normed_line.strip()
+		return text
 
 
 
@@ -225,12 +255,9 @@ class Chatbot:
 		pattern = '"([^"]*)"'
 
 		matches = re.findall(pattern, preprocessed_input)
-
-		fixedMovies = []
 		for m in matches:
 			self.buildUserDict(m)
-			fixedMovies.append(m)
-		return fixedMovies
+		return matches
 
 
 	#Takes a found movie given by user and adds to movie->year dict.
@@ -329,8 +356,6 @@ class Chatbot:
 		# remove titles from input
 		input_text = self.removeTitleHelper(preprocessed_input)
 		input_text = self.removePunctuationHelper(input_text)
-
-		print(input_text)
 
 		# count pos and neg words in the input
 		input_list = input_text.split()

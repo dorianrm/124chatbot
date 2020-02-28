@@ -24,10 +24,11 @@ class Chatbot:
 		# movie i by user j
 		self.titles, ratings = movielens.ratings()
 		self.sentiment = movielens.sentiment()
-		self.articles = ["the", "a", "an"]
+		self.articles = ["the", "a", "an", "The", "A", "An"]
 		self.movieToYear = {} # movie title -> year
 		self.recommends = {} # score -> movie index   (only k entries)
 		self.userSentiment = {} # movie index -> sentiment
+		self.count = 0 # keep track of number of movies user has given
 
 		#############################################################################
 		# TODO: Binarize the movie ratings matrix.                                  #
@@ -52,7 +53,9 @@ class Chatbot:
 		# TODO: Write a short greeting message                                      #
 		#############################################################################
 
-		greeting_message = "How can I help you?"
+		greeting_message =  "Hi! I'm MovieBot! I'm going to recommend a movie to you.  \
+		First I will ask you about your taste in movies. Tell me about a movie that you \
+		have seen."
 
 		#############################################################################
 		#                             END OF YOUR CODE                              #
@@ -65,7 +68,7 @@ class Chatbot:
 		# TODO: Write a short farewell message                                      #
 		#############################################################################
 
-		goodbye_message = "Have a nice day!"
+		goodbye_message = "Thank you for hanging out with me! Stay in touch! Goodbye!"
 
 		#############################################################################
 		#                             END OF YOUR CODE                              #
@@ -105,20 +108,51 @@ class Chatbot:
 
 
 		else:
-			response = "I processed {} in starter mode!!".format(line)
-			fixedLine = self.preprocess(line)
-			sentiment_val = self.extract_sentiment(fixedLine)
-			print("fixed line: ", fixedLine)
-			user_movies = self.extract_titles(fixedLine)
-			print("user movies: ", user_movies)
-			foundMovies = []
-			for m in user_movies:
-				foundMovies.extend(self.find_movies_by_title(m))
-			print("found movies: ",foundMovies)
+			response = "I processed {} in starter mode!!".format(line) #Inserts line for {}
+			# processed_line = self.preprocess(line)
+			sentiment_val = self.extract_sentiment(line)
+			extracted_movies = self.extract_titles(line)
+			found_movies = []
+			for m in extracted_movies:
+				title = self.buildUserDict(m)
+				found_movies.extend(self.find_movies_by_title(title))
+
+			for m in found_movies:
+				self.userSentiment[m] = sentiment_val
+
+			self.count += 1
+			self.movieToYear = {}
+
+			print("extracted movies: ", extracted_movies)
+			print("found movies: ",found_movies)
 			print("sentiment: ", sentiment_val)
-			user_matrix = np.zeros((self.ratings.shape[0], 1))
-			print(user_matrix)
-			print(user_matrix.shape)
+
+			if self.count == 6:
+				user_matrix = self.createUserMatrix()
+				recommendations = self.recommend(user_matrix, self.ratings, 5, creative=False)
+				print(recommendations)
+				self.count = 0
+
+
+
+
+			# user_matrix = np.zeros((self.ratings.shape[0], 1))
+			# print(user_matrix)
+			# print(user_matrix.shape)
+
+			'''
+			TESTING RECOMMEND
+			+1 : 8514, 7953, 6979, 7890
+
+			I like "Wonder Woman (2009)"
+			I like "The Dark Knight Rises (2012)"
+			I like "The Incredible Hulk (2008)"
+			I like "The Avengers (2012)"
+
+			-1: 7369, 8726
+			I don't like "Saw VI (2009)"
+			I don't like "Dumb and Dumber To (2014)"
+			'''
 
 		#############################################################################
 		#                             END OF YOUR CODE                              #
@@ -194,8 +228,8 @@ class Chatbot:
 
 		fixedMovies = []
 		for m in matches:
-			title = self.buildUserDict(m)
-			fixedMovies.append(title)
+			self.buildUserDict(m)
+			fixedMovies.append(m)
 		return fixedMovies
 
 
@@ -227,7 +261,7 @@ class Chatbot:
 	def fixedTitles(self, title):
 		words = title.split(' ', 1)
 		if words[0] in self.articles:
-			title = words[1] 
+			title = words[1] + ", " + words[0]
 		return title
 
 
@@ -249,10 +283,13 @@ class Chatbot:
 		"""
 		movies = []
 		for i,t in enumerate(self.titles):
-			t_lower = t[0].lower()
-			t_year = self.checkYearHelper(t_lower)
-			new_t = self.fixedTitles(t_lower)
-			if title in new_t:
+			t_title = t[0]
+			t_year = self.checkYearHelper(t_title)
+			if t_year != None:
+				t_title = t_title.replace(t_year, '')  #remove year
+				t_title = t_title.strip()
+			new_t = self.fixedTitles(t_title)
+			if title == new_t:
 				if self.movieToYear[title] == t_year:
 					movies.append(i)
 				elif self.movieToYear[title] == -1:
@@ -504,11 +541,15 @@ class Chatbot:
 		#############################################################################
 		# TODO: Compute cosine similarity between the two vectors.
 		#############################################################################
-		similarity == np.dot(v1, v2) / (np.linalg.norm(v1) * np.linalg.norm(v2))
+		sim = 0
+		# if np.linalg.norm(u) * np.linalg.norm(v) != 0:
+		# 	sim == np.dot(u, v) / (np.linalg.norm(u) * np.linalg.norm(v))
+		if np.linalg.norm(u) != 0 and np.linalg.norm(v) != 0:
+			sim = np.dot(u, v) / (np.linalg.norm(u) * np.linalg.norm(v))
 		#############################################################################
 		#                             END OF YOUR CODE                              #
 		#############################################################################
-		return similarity
+		return sim
 
 
 
@@ -553,17 +594,22 @@ class Chatbot:
 		# Populate this list with k movie indices to recommend to the user.
 		recommendations = []
 		rec = {} # movie index -> scores
-		for index, row in enumerate(self.ratings):
-			if index not in self.userSentiment:
+		user_pref = {}
+		for index, row in enumerate(user_ratings):
+			if user_ratings[index] != 0:
+				user_pref[index] = user_ratings[index]
+
+		for index, row in enumerate(ratings_matrix):
+			if index not in user_pref:
 				score = 0
-				for key,value in self.userSentiment.items():
-					sim = self.similarity(self.ratings[key], row)
-					score += sim * value
+				for key,value in user_pref.items():
+					sim = self.similarity(ratings_matrix[key], row)
+					score += (sim * value)
 				rec[index] = score
-		rec_sort = Counter(rec)
-		high = rec_sort.most_common(k)
-		for key in high:
-			recommendations.append(key)
+		recommendations = sorted(rec, key=rec.get, reverse=True)[:k]
+
+
+
 
 		# Ask for 5 movies -> fill in sentiment for those indexes in sparse user/movie vector
 		# Cosine sim each missing movie with rows of 5 movies that user gave input on

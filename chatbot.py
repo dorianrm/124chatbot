@@ -103,8 +103,7 @@ class Chatbot:
 			found_movies = []
 			extracted_movies = self.extract_titles(line)
 			response = self.checkEmotion(line)
-
-			# response += self.checkArbitrary(line)
+			response += self.checkArbitrary(line)
 
 			# extract sentiment
 			sentiment = self.extract_sentiment(line)
@@ -119,7 +118,7 @@ class Chatbot:
 					self.prevMovies = []
 					self.prevSentiment = 0
 					self.clarification = False
-					response += "sentiment + movie" # PLACEHOLDER
+					#response += "sentiment + movie" # PLACEHOLDER
 
 				elif self.toLower(line) == "stop":
 					self.prevMovies = []
@@ -139,7 +138,7 @@ class Chatbot:
 
 					found_movies = self.disambiguate(line, self.prevMovies)
 					if len(found_movies) == 0:
-						response += "I'm sorry, I couldn't find anything with your clarrification. Starting new search query."
+						response += "I'm sorry, I couldn't find anything with your clarification. Starting new search query."
 						self.prevMovies = []
 						self.prevSentiment = 0
 						self.clarification = False
@@ -159,7 +158,11 @@ class Chatbot:
 
 			# if no movies are found, ask user to talk about a movie
 			if len(extracted_movies) == 0 and self.currMovie == "":
-				response += "I'm sorry, I haven't heard about that movie before. Can you tell me about another one? (And please make sure to put the movie title in quotation marks!)"
+				if response == "":
+					response += "Sorry, "
+				response += self.getArbitraryResponse(random.randint(0,5))
+				response += self.getArbitrarySuggestion(random.randint(0,5))
+				response += "(Remember, I only recognize movies in quotation marks!)"
 				return response
 
 			# DISAMBIGUATE
@@ -336,7 +339,38 @@ class Chatbot:
 		return response
 
 	def checkArbitrary(self, input_text):
-		can_structure = '.*[Cc]an you([^?.]*)?'
+		can_structure = '.*[Cc]an you ([^?.]*)?'
+		matches = re.findall(can_structure, input_text)
+		if len(matches) != 0:
+			response = "Why do you want to know if I can " + matches[0] + "? Anyway, "
+			return response
+
+		what_structure = '(?:[Ww]hat\'s|[Ww]hat is) ([^?.]*)?'
+		matches = re.findall(what_structure, input_text)
+		if len(matches) != 0:
+			response = "Hm, I'm not exactly sure what " + matches[0] + " is... Anyway, "
+			return response
+
+
+		are_structure = '[Aa]re you ([^?.]*)?'
+		matches = re.findall(are_structure, input_text)
+		if len(matches) != 0:
+			response = "I am not " + matches[0] + "... Anyway, "
+			return response
+
+		how_structure = '[Hh]ow do you ([^?.]*)?'
+		matches = re.findall(how_structure, input_text)
+		if len(matches) != 0:
+			response = "Hm, I don't really know how I " + matches[0] + ". Anyway, "
+			return response
+
+		why_structure = '[Ww]hy do you ([^?.]*)?'
+		matches = re.findall(why_structure, input_text)
+		if len(matches) != 0:
+			response = "Hm, I don't really know why I " + matches[0] + ". Anyway, "
+			return response
+
+		return ""
 
 
 	def getArbitraryResponse(self, random):
@@ -364,11 +398,9 @@ class Chatbot:
 		return suggestions[random]
 
 	def checkEmotion(self, input_text):
-		print("entering checkEmotion() \n =====")
 		input_list = input_text.split()
-		print(input_list)
 		for word in input_list:
-			print("word: ", word)
+			# print("word: ", word)
 			happy = self.checkHappy(word)
 			if happy == True:
 				return "Sounds like you're happy! Glad to hear it! Anyway, "

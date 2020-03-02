@@ -1225,7 +1225,9 @@ class Chatbot:
 		for word in clarification.split():
 			for movie in candidates:
 				if word.isnumeric():
-					if int(word) == movie:
+					if word in self.titles[movie][0].split():
+						suggest.append(movie)
+					elif int(word) == movie:
 						suggest.append(movie)
 					elif int(word) < len(candidates)-1 and candidates[int(word)-1] not in suggest:
 						suggest.append(candidates[int(word)-1])

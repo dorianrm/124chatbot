@@ -1,14 +1,13 @@
 # PA6, CS124, Stanford, Winter 2019
 # v.1.0.3
-# Chatbot.py
 # Original Python code by Ignacio Cases (@cases)
 ######################################################################
 import movielens
 
 import numpy as np
 import re
-import random
 from collections import Counter
+import random
 
 
 # noinspection PyMethodMayBeStatic
@@ -16,7 +15,9 @@ class Chatbot:
 	"""Simple class to implement the chatbot for PA 6."""
 
 	def __init__(self, creative=False):
-		self.name = 'popcornpal'
+		# The chatbot's default name is `moviebot`. Give your chatbot a new name.
+		self.name = 'moviebot'
+
 		self.creative = creative
 
 		# This matrix has the following shape: num_movies x num_users
@@ -24,13 +25,23 @@ class Chatbot:
 		# movie i by user j
 		self.titles, ratings = movielens.ratings()
 		self.sentiment = movielens.sentiment()
+
+		self.userSentiment = {}
 		self.articles = ["the", "a", "an", "The", "A", "An", "le", "la", "lo", "las", "los", "il", "der", "les", "die", "el"]
 		self.count = 0 # keep track of number of movies user has given
+		
 		self.clarification = False
 		self.prevMovies = []
 		self.prevSentiment = 0
 		self.currMovie = ""
 		self.currSentiment = 0 
+		self.prevIndex = 0
+
+
+
+		# self.movieToYear = {} # movie title -> year
+		# self.recommends = {} # score -> movie index   (only k entries)
+		# self.userSentiment = {} # movie index -> sentiment
 
 		#############################################################################
 		# TODO: Binarize the movie ratings matrix.                                  #
@@ -55,7 +66,7 @@ class Chatbot:
 		# TODO: Write a short greeting message                                      #
 		#############################################################################
 
-		greeting_message =  "Hi, there! I'm PopcornPal! I'm going to recommend a movie to you, but first I need to know a little more about your taste in movies. Can you tell me about a movie that you have seen? (Please put the movie title in quotation marks!) I need 5 preferences recommendations"
+		greeting_message =  "Hi! I'm MovieBot! I'm going to recommend a movie to you. First I will ask you about your taste in movies. Tell me about a movie that you have seen. I need 5 preferences recommendations"
 
 		#############################################################################
 		#                             END OF YOUR CODE                              #
@@ -81,15 +92,20 @@ class Chatbot:
 
 	def process(self, line):
 		"""Process a line of input from the REPL and generate a response.
+
 		This is the method that is called by the REPL loop directly with user input.
+
 		You should delegate most of the work of processing the user's input to
 		the helper functions you write later in this class.
+
 		Takes the input string from the REPL and call delegated functions that
 		  1) extract the relevant information, and
 		  2) transform the information into a response to the user.
+
 		Example:
 		  resp = chatbot.process('I loved "The Notebook" so much!!')
 		  print(resp) // prints 'So you loved "The Notebook", huh?'
+
 		:param line: a user-supplied line of text
 		:returns: a string containing the chatbot's response to the user input
 		"""
@@ -104,15 +120,12 @@ class Chatbot:
 			extracted_movies = self.extract_titles(line)
 			response = self.checkEmotion(line)
 			response += self.checkArbitrary(line)
+			print(self.clarification)
 
-			# extract sentiment
-			sentiment = self.extract_sentiment(line)
-
-			# prevMovie = self.prevMovies[0]
-			# prevSentiment = self.prevSentiment
+			#  I liked the "notbook"
 
 			if self.clarification:
-				if self.toLower(line) == "yes":
+				if self.toLower(line) == "\"yes\"" or self.toLower(line) == "yes":
 					self.currMovie = self.prevMovies[0]
 					self.currSentiment = self.prevSentiment
 					self.prevMovies = []
@@ -120,41 +133,44 @@ class Chatbot:
 					self.clarification = False
 					#response += "sentiment + movie" # PLACEHOLDER
 
-				elif self.toLower(line) == "stop":
+				elif self.toLower(line) == "stop" or self.toLower(line) == "\"stop\"":
 					self.prevMovies = []
 					self.prevSentiment = 0
 					self.clarification = False
+					self.prevIndex = 0
 					response += "Starting a new search query"
 					return response
-				elif self.toLower(line) == "no":
+				elif self.toLower(line) == "\"no\"" or self.toLower(line) == "no":
 					response += "Please provide me another clarification on your search. If you wish to make another search type: STOP"
 					self.clarification = True
 					return response
 				else:
-
-					"""
-					DORIAN STOPPED HERE
-					"""
-
-					found_movies = self.disambiguate(line, self.prevMovies)
+					if len(extracted_movies) == 0:
+						response += "I'm sorry I don't understand. Remember to place your clarification within quotation marks. Type STOP if you wish to make another search query."
+						return response
+					found_movies = self.disambiguate(extracted_movies[0], self.prevMovies)
 					if len(found_movies) == 0:
-						response += "I'm sorry, I couldn't find anything with your clarification. Starting new search query."
+						response += "I'm sorry, I couldn't find anything with your clarification. Starting new search query. Please tell me about a movie that you have seen."
 						self.prevMovies = []
 						self.prevSentiment = 0
 						self.clarification = False
+						self.prevIndex = 0
 						return response
 					elif len(found_movies) == 1:
-						movie = self.titles[found_movies[0]]
+						movie = self.titles[found_movies[0]][0]
+						self.prevIndex = found_movies[0]
 						self.prevMovies = [movie]
 						response += "Did you mean " + movie + "? Let me know \"yes\" or \"no\"."
 						return response
 					elif len(found_movies) > 1:
 						self.clarification = True
 						self.prevMovies = found_movies
-						self.prevSentiment = sentiment
 						response += "I've found some movies similar to what you inputted. Could you give me more info to help me pick the right one on the ones I've found?"
 						print(found_movies)
 						return response
+
+
+			sentiment = self.extract_sentiment(line)
 
 			# if no movies are found, ask user to talk about a movie
 			if len(extracted_movies) == 0 and self.currMovie == "":
@@ -172,6 +188,8 @@ class Chatbot:
 				response += "can you tell me about the movies one at a time? Go ahead."
 				return response
 
+			print("extracted", extracted_movies)			
+
 			for m in extracted_movies:
 				found_movies.extend(self.find_movies_by_title(m))
 
@@ -186,43 +204,26 @@ class Chatbot:
 					self.clarification = True
 					self.prevMovies.append(movie)
 					self.prevSentiment = sentiment
-					response += "Did you mean " + movie + "?"
+					self.prevIndex = found_movies[0]
+					response += "Did you mean " + movie + "? Please type \"yes\" or \"no\""
 					return response
 				elif len(found_movies) > 1:
 					self.clarification = True
 					self.prevMovies = found_movies
 					self.prevSentiment = sentiment
-					response += "I've found some movies similar to what you inputted. Could you give me more info to help me pick the right one on the ones I've found?"
-					print(found_movies)
+					response += "I've found some movies similar to what you inputted. Could you give me more info to help me pick the right one on the ones I've found? (Remember, put your clarification within quotation marks :) This is what I've found: \n\n"
+					for m in found_movies:
+						response += self.titles[m][0] + '\n'
 					return response
 
 			if len(found_movies) > 1:
-				self.clarifiction = True
+				self.clarification = True
 				self.prevMovies = found_movies
 				self.prevSentiment = sentiment
-				response += "I've found some movies similar to what you inputted. Could you give me more info to help me pick the right one on the ones I've found?"
-				print(found_movies)
+				response += "I've found some movies similar to what you inputted. Could you give me more info to help me pick the right one on the ones I've found? (Remember, put your clarification within quotation marks :) This is what I've found: \n\n"
+				for m in found_movies:
+					response += self.titles[m][0] + '\n'
 				return response
-			"""
-			if len(extracted_movies) == 0:
-				if response == "":
-					response += "Sorry, "
-				response += self.getArbitraryResponse(random.randint(0,5))
-				response += self.getArbitrarySuggestion(random.randint(0,5))
-				response += "(I only recognize movies in quotation marks)"
-				return response
-
-			"""		
-
-			# if self.clarification == False:
-			# 	# put movie -> sentiment into dict
-			# 	extracted_movie = extracted_movies[0]
-			# else:
-			# 	extracted_movie = self.prevMovies[0]
-			# 	sentiment = self.prevSentiment
-			# 	self.clarification = False
-			# 	self.prevMovies = []
-			# 	self.prevSentiment = 0
 
 			if self.currMovie != "":
 				extracted_movie = self.currMovie
@@ -232,18 +233,24 @@ class Chatbot:
 			else:
 				extracted_movie = extracted_movies[0]
 
+			if self.prevIndex == 0:
+				self.prevIndex = found_movies[0]
+
 			# get sentiment and respond
 			if sentiment == 0:
 				response += "I couldn't tell if you liked \"" + extracted_movie + "\". Can you tell me more about " + extracted_movie + "? "
 				return response
 			elif sentiment > 0:
 				response += "I'm glad you liked \"" + extracted_movie + "\"! It sounds like an awesome movie! " + "I'll definitely check it out some time. "
+				self.userSentiment[self.prevIndex] = sentiment
 			elif sentiment < 0:
 				response += "I'm sorry you didn't like \"" + extracted_movie + "\". It sounds like a terrible movie! " + "I'll make sure to avoid that one, for sure. "
+				self.userSentiment[self.prevIndex] = sentiment
 
 
-			self.count += 1
 			self.movieToYear = {}
+			self.prevIndex = 0
+			self.count += 1
 
 			"""
 			print("extracted movies: ", extracted_movies)
@@ -255,10 +262,28 @@ class Chatbot:
 				user_matrix = self.createUserMatrix()
 				recommendations = self.recommend(user_matrix, self.ratings, 5, creative=False)
 				response += "\nThat's enough for me to make a recommendation. I suggest you watch " + self.titles[recommendations[0]][0] + ". Would you like to hear another recommendation? (Or enter :quit if you're done.) "
-				print("recommendations", recommendations)
 				self.count = 0
+				self.prevIndex = 0
+				self.clarification = False
+				self.prevMovies = []
+				self.currMovie = ""
 			else: 
 				response += "Thanks for sharing that with me! \n\nCan you tell me about another movie?"
+
+
+
+			# extracted_movies = self.extract_titles(line)
+			# found_movies = []
+			# print("extracted", extracted_movies)
+			# close = []
+			# for m in extracted_movies:
+			#   found_movies.extend(self.find_movies_by_title(m))
+			#   close.extend(self.find_movies_closest_to_title(m))
+			# print("found", found_movies)
+			# print("close", close)
+
+			# print(self.disambiguate("Sorcerer's Stone", [3812, 4325, 5399, 6294, 6735, 7274, 7670, 7842]))
+
 
 
 
@@ -270,52 +295,44 @@ class Chatbot:
 
 			extracted_movies = self.extract_titles(line)
 			if len(extracted_movies) == 0:
-				response = "Sorry, I don't think I understand... Can you tell me about a movie that you've seen? (I only recognize movies in quotation marks)"
+				response = "Sorry, I don't understand. Tell me about a movie that you have seen."
 				return response
 
 			if len(extracted_movies) > 1:
-				response = "Oh wait, can you tell me about the movies one at a time? Go ahead."
+				response = "Please tell me about one movie at a time. Go ahead."
 				return response
 
-			sentiment_val = self.extract_sentiment(line)
+			sentiment = self.extract_sentiment(line)
 			extracted_movie = extracted_movies[0]
 
 			found_movies = []
-
 			for m in extracted_movies:
 				found_movies.extend(self.find_movies_by_title(m))
 
 			if len(found_movies) == 0:
-				response = "I'm sorry, I haven't heard about that movie before. Can you tell me about another one? (And please make sure to put the movie title in quotation marks!)"
+				response = "I'm sorry, I haven't heard about that movie before. Please give me another movie."
 				return response
 
-			sentiment = self.extract_sentiment(line)
+			for m in found_movies:
+				self.userSentiment[m] = sentiment
+
 			if sentiment == 0:
 				return "Hmmm, I couldn't tell if you liked \"" + extracted_movie + "\". Can you tell me more about " + extracted_movie + "?"
-			elif sentiment > 0:
+			elif sentiment == 1:
 				response = "Nice, I'm glad you liked \"" + extracted_movie + "\"! It sounds like an awesome movie! " + "I'll definitely check it out some time."
-			elif sentiment < 0:
+			elif sentiment == -1:
 				response = "Ugh, I'm sorry you didn't like \"" + extracted_movie + "\". It sounds like a terrible movie! " + "I'll make sure to avoid that one, for sure."
 
 
 			self.count += 1
-			self.movieToYear = {}
 
-			"""
-			print("extracted movies: ", extracted_movies)
-			print("found movies: ",found_movies)
-			print("sentiment: ", sentiment_val)
-			"""
+			response += " Thanks for sharing that with me! Please give me another movie."
 
 			if self.count == 5:
 				user_matrix = self.createUserMatrix()
 				recommendations = self.recommend(user_matrix, self.ratings, 5, creative=False)
-				response += "\nThat's enough for me to make a recommendation. I suggest you watch " + self.titles[recommendations[0]][0] + ". Would you like to hear another recommendation? (Or enter :quit if you're done.)"
-				print("recommendations", recommendations)
+				response = "That's enough for me to make a recommendation. I suggest you watch " + self.titles[recommendations[0]][0] + ". Would you like to hear another recommendation? (Or enter :quit if you're done.)"
 				self.count = 0
-			else: 
-				response += " Thanks for sharing that with me! \n\nCan you tell me about another movie?"
-
 
 			# user_matrix = np.zeros((self.ratings.shape[0], 1))
 			# print(user_matrix)
@@ -324,10 +341,12 @@ class Chatbot:
 			'''
 			TESTING RECOMMEND
 			+1 : 8514, 7953, 6979, 7890
+
 			I like "Wonder Woman (2009)"
 			I like "The Dark Knight Rises (2012)"
 			I like "The Incredible Hulk (2008)"
 			I like "The Avengers (2012)"
+
 			-1: 7369, 8726
 			I don't like "Saw VI (2009)"
 			I don't like "Dumb and Dumber To (2014)"
@@ -636,7 +655,7 @@ class Chatbot:
 		Returns the title without the first article
 		"""
 		words = title.split(' ', 1)
-		if words[0] in self.articles:
+		if words[0] in self.articles and len(title) > 1:
 			title = words[1] + ", " + words[0]
 		return title
 
@@ -792,20 +811,17 @@ class Chatbot:
 
 		"""sentiment = 0
 		negated = False
-
 		# remove titles from input
 		input_text = self.removeTitleHelper(preprocessed_input)
 		input_text = self.markPunctuationHelper(input_text)
 		input_list = input_text.split()
 		# print('START:\n ', input_list)
-
 		for word in input_list:
 			# set negated boolean 
 			if word == 'PUNC':
 				negated = False
 			elif self.checkNegation(word) == True:
 				negated = True
-
 			# get sentiment value of the word
 			sentiment_word = self.checkLexicon(word)
 			if sentiment_word == 'pos':
@@ -814,18 +830,13 @@ class Chatbot:
 				sentiment_val = -1
 			else:
 				sentiment_val = 0
-
 			# check if the sentiment is supposed to be negated
 			if negated == True:
 				sentiment_val *= -1
 				word += '_NEG'
 				print('negated word: ', word)
-
 			sentiment += sentiment_val
-
 		# print('FINAL:\n', input_list)
-
-
 		if sentiment > 0:
 			return 1
 		elif sentiment < 0:
@@ -1152,9 +1163,6 @@ class Chatbot:
 			title = self.buildUserDict(movie)
 			found_movies.extend(self.find_movies_by_title(title))
 	
-
-
-
 		pass
 		"""
 
@@ -1210,6 +1218,7 @@ class Chatbot:
 		:returns: a list of indices corresponding to the movies identified by the clarification
 		"""
 		numbers = ['first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh', 'eight', 'ninth', 'tenth']
+		nums = ['1st', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th', '9th', '10th']
 		suggest = []
 
 
@@ -1218,14 +1227,18 @@ class Chatbot:
 				if word.isnumeric():
 					if int(word) == movie:
 						suggest.append(movie)
-					elif int(word) < len(candidates)-1:
+					elif int(word) < len(candidates)-1 and candidates[int(word)-1] not in suggest:
 						suggest.append(candidates[int(word)-1])
 					elif int(word) == int(self.checkYearHelper(self.titles[movie][0])[1:-1]):
 						suggest.append(movie)
 				elif word in numbers:
-					suggest.append(candidates[numbers.index(word)])
+					suggest = [candidates[numbers.index(word)]]
+				elif word in nums:
+					suggest = [candidates[nums.index(word)]]
 		if len(suggest) == 0:
-			suggest.extend(self.find_movies_by_title(clarification))
+			for m in self.find_movies_by_title(clarification):
+				if m in candidates:
+					suggest.append(m) 
 
 		return suggest
 
@@ -1373,7 +1386,6 @@ class Chatbot:
 		Search no further! Just have a short chat with PopcornPal, talking about some movies you've
 		liked or disliked, and PopcornPal will generate a personalized movie recommendation for you
 		based on your very own movie tastes and preferences!
-
 		(Note: Please make sure to put the movie titles in quotation marks.)
 		"""
 

@@ -27,7 +27,14 @@ class Chatbot:
 
 		self.articles = ["the", "a", "an", "The", "A", "An", "le", "la", "lo", "las", "los", "il", "der", "les", "die", "el"]
 		self.count = 0 # keep track of number of movies user has given
+		
+		
+
+		self.clarification = False
 		self.prevMovies = []
+		self.prevSentiment = 0
+
+
 
 		# self.movieToYear = {} # movie title -> year
 		# self.recommends = {} # score -> movie index   (only k entries)
@@ -106,15 +113,70 @@ class Chatbot:
 		#############################################################################
 		if self.creative:
 			response = "I processed {} in creative mode!!".format(line)
-			extracted_movies = self.extract_titles(line)
-			found_movies = []
-			print("extracted", extracted_movies)
-			close = []
-			for m in extracted_movies:
-				found_movies.extend(self.find_movies_by_title(m))
-				close.extend(self.find_movies_closest_to_title(m))
-			print("found", found_movies)
-			print("close", close)
+
+			if self.clarification:
+				if line.to_lower() == "yes":
+					movie = self.prevMovies[0]
+					self.prevMovies = []
+					self.prevSentiment = 0
+					self.clarification = False
+					return response = "sentiment + movie"
+				elif line.to_lower == "stop":
+					return respone = "Starting a new search query"
+				elif line.to_lower() == "no":
+					response = "Please provide me another clarification on your search. If you wish to make another search type: STOP"
+					self.clarification == True
+				else:
+					found_movies = self.disambiguate(line, prevMovies)
+					if len(found_movies) == 0:
+						response = "I'm sorry, I don't understand"
+					elif len(found_movies) == 1:
+						movie = self.titles[found_movies[0]]
+						self.clarification == True
+						self.prevMovies.append(movie)
+						self.prevSentiment = sentiment
+						response = "Did you mean " + movie + "?"
+					elif len(found_movies) > 1:
+						self.clarification == True
+						self.prevMovies = found_movies
+						self.prevSentiment = sentiment
+						response = "I've found some movies similar to what you inputted. Could you give me more info to help me pick the right one on the ones I've found?"
+						return response
+
+			if len(found_movies) == 0:
+				for m in extracted_movies:
+					found_movies.extend(self.find_movies_closest_to_title(m))
+				if len(found_movies) == 0:
+					response = "I'm sorry, I don't understand"
+				elif len(found_movies) == 1:
+					movie = self.titles[found_movies[0]][0]
+					self.clarification == True
+					self.prevMovies.append(movie)
+					self.prevSentiment = sentiment
+					response = "Did you mean " + movie + "?"
+				elif len(found_movies) > 1:
+					self.clarification == True
+					self.prevMovies = found_movies
+					self.prevSentiment = sentiment
+					response = "I've found some movies similar to what you inputted. Could you give me more info to help me pick the right one on the ones I've found?"
+					return response
+
+			if len(found_movies) > 1:
+				self.clarifiction == True
+				self.prevMovies = found_movies
+				self.prevSentiment = sentiment
+				response = "I've found some movies similar to what you inputted. Could you give me more info to help me pick the right one on the ones I've found?"
+				return response
+
+			# extracted_movies = self.extract_titles(line)
+			# found_movies = []
+			# print("extracted", extracted_movies)
+			# close = []
+			# for m in extracted_movies:
+			# 	found_movies.extend(self.find_movies_by_title(m))
+			# 	close.extend(self.find_movies_closest_to_title(m))
+			# print("found", found_movies)
+			# print("close", close)
 
 			# print(self.disambiguate("Sorcerer's Stone", [3812, 4325, 5399, 6294, 6735, 7274, 7670, 7842]))
 
@@ -136,21 +198,17 @@ class Chatbot:
 				response = "Please tell me about one movie at a time. Go ahead."
 				return response
 
-			sentiment_val = self.extract_sentiment(line)
+			sentiment = self.extract_sentiment(line)
 			extracted_movie = extracted_movies[0]
 
 			found_movies = []
 			for m in extracted_movies:
 				found_movies.extend(self.find_movies_by_title(m))
 
-			for m in found_movies:
-				self.userSentiment[m] = sentiment_val
-
 			if len(found_movies) == 0:
 				response = "I'm sorry, I haven't heard about that movie before. Please give me another movie."
 				return response
 
-			sentiment = self.extract_sentiment(line)
 			if sentiment == 0:
 				return "Hmmm, I couldn't tell if you liked \"" + extracted_movie + "\". Can you tell me more about " + extracted_movie + "?"
 			elif sentiment == 1:
@@ -161,13 +219,9 @@ class Chatbot:
 
 			self.count += 1
 
-			print("extracted movies: ", extracted_movies)
-			print("found movies: ",found_movies)
-			print("sentiment: ", sentiment_val)
-
 			response += " Thanks for sharing that with me! Please give me another movie."
 
-			if self.count == 6:
+			if self.count == 5:
 				user_matrix = self.createUserMatrix()
 				recommendations = self.recommend(user_matrix, self.ratings, 5, creative=False)
 				response = "That's enough for me to make a recommendation. I suggest you watch " + self.titles[recommendations[0]][0] + ". Would you like to hear another recommendation? (Or enter :quit if you're done.)"
@@ -604,9 +658,6 @@ class Chatbot:
 		title_low = self.toLower(title)
 		input_low = self.matchMovieToYear(title_low)
 		closest = max_distance
-
-		# print("input", input_title)
-		# print("tokenized", token_title)
 
 		movies = []
 		for i,t in enumerate(self.titles):

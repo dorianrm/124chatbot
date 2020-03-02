@@ -1,0 +1,51 @@
+#########################################################################################
+# TODO: Fill this template out in addition to the code implementation in chatbot.py!    #
+#                                                                                       #
+# Each "Creative" feature in the rubric has a section below.                            #
+# For every feature you chose to implement, replace the "NO" at the end of the relevant #
+# lines with "YES".                                                                     #
+#                                                                                       #
+# You will only receive credit for the features you mark as YES below!                  #
+#########################################################################################
+
+FEATURE - Identifying movies without quotation marks and correct capitalization (part 1): NO
+FEATURE - Identifying movies without quotation marks and correct capitalization (part 2): NO
+FEATURE - Alternate/foreign titles: YES
+FEATURE - Disambiguation (part 1): YES
+FEATURE - Fine-grained sentiment extraction: YES
+FEATURE - Spell-correcting fallback for find_movies_by_title: YES
+FEATURE - Extracting sentiment with multiple-movie input: NO
+FEATURE - Disambiguation (part 2): YES
+FEATURE - Disambiguation (part 3): NO
+FEATURE - Dialogue for spell-checking: YES
+FEATURE - Dialogue for disambiguation: YES
+FEATURE - Communicating sentiments and movies extracted to the user given multiple-movie input: NO
+FEATURE - Understanding references to things said previously: NO
+FEATURE - Responding to arbitrary input: YES
+FEATURE - Speaking very fluently: NO
+FEATURE - Identifying and responding to emotions: YES
+Did not implement any of the above features: YES
+
+#########################################################################################
+# Team Contributions                                                                    #
+#########################################################################################
+Dorian: I worked primarily on the functions for extracting movie titles from user's input
+and finding corresponding titles in the database. I also completed the binarize function,
+all of the functionality for recommend (collaborative filtering), disambiguate, and 
+spell-checking through Levenshtein distance. Additionally, I handled much of the logic for
+how these functions are utilized in the process function for communicating with the user. I 
+handled spellchecking  for the user's input as well as helping the user clarify any inputs
+that are ambiguous that return multiple possible movie titles.   
+
+Monique:
+She honestly didn't put much effort into this assignment at all. She was willing to meet
+Together when we first started working on the assignment but after that, she didn't show
+up to any further meetings that we planned out days in advance. She only helped in creating
+Arbitrary string responses for what our chatbot says when talking with the user but that's it.
+She honestly didn't really do anything. 
+
+#########################################################################################
+# Optional: Feel free to include anything else that you want us to know about your      #
+# implementation!                                                                       #
+#########################################################################################
+(optional) If you have anything else you want to add, delete this and type it here!

@@ -24,11 +24,14 @@ class Chatbot:
 		# movie i by user j
 		self.titles, ratings = movielens.ratings()
 		self.sentiment = movielens.sentiment()
-		self.articles = ["the", "a", "an", "The", "A", "An"]
-		self.movieToYear = {} # movie title -> year
-		self.recommends = {} # score -> movie index   (only k entries)
-		self.userSentiment = {} # movie index -> sentiment
+
+		self.articles = ["the", "a", "an", "The", "A", "An", "le", "la", "lo", "las", "los", "il", "der", "les", "die", "el"]
 		self.count = 0 # keep track of number of movies user has given
+		self.prevMovies = []
+
+		# self.movieToYear = {} # movie title -> year
+		# self.recommends = {} # score -> movie index   (only k entries)
+		# self.userSentiment = {} # movie index -> sentiment
 
 		#############################################################################
 		# TODO: Binarize the movie ratings matrix.                                  #
@@ -103,6 +106,19 @@ class Chatbot:
 		#############################################################################
 		if self.creative:
 			response = "I processed {} in creative mode!!".format(line)
+			extracted_movies = self.extract_titles(line)
+			found_movies = []
+			print("extracted", extracted_movies)
+			close = []
+			for m in extracted_movies:
+				found_movies.extend(self.find_movies_by_title(m))
+				close.extend(self.find_movies_closest_to_title(m))
+			print("found", found_movies)
+			print("close", close)
+
+			# print(self.disambiguate("Sorcerer's Stone", [3812, 4325, 5399, 6294, 6735, 7274, 7670, 7842]))
+
+
 
 
 		else:
@@ -125,15 +141,14 @@ class Chatbot:
 
 			found_movies = []
 			for m in extracted_movies:
-				title = self.buildUserDict(m)
-				found_movies.extend(self.find_movies_by_title(title))
+				found_movies.extend(self.find_movies_by_title(m))
 
 			for m in found_movies:
 				self.userSentiment[m] = sentiment_val
 
 			if len(found_movies) == 0:
 				response = "I'm sorry, I haven't heard about that movie before. Please give me another movie."
-				return
+				return response
 
 			sentiment = self.extract_sentiment(line)
 			if sentiment == 0:
@@ -145,7 +160,6 @@ class Chatbot:
 
 
 			self.count += 1
-			self.movieToYear = {}
 
 			print("extracted movies: ", extracted_movies)
 			print("found movies: ",found_movies)
@@ -156,14 +170,9 @@ class Chatbot:
 			if self.count == 6:
 				user_matrix = self.createUserMatrix()
 				recommendations = self.recommend(user_matrix, self.ratings, 5, creative=False)
-				print(response)
 				response = "That's enough for me to make a recommendation. I suggest you watch " + self.titles[recommendations[0]][0] + ". Would you like to hear another recommendation? (Or enter :quit if you're done.)"
 				print("recommendations", recommendations)
 				self.count = 0
-
-			
-
-
 
 			# user_matrix = np.zeros((self.ratings.shape[0], 1))
 			# print(user_matrix)
@@ -209,13 +218,6 @@ class Chatbot:
 		# method unmodified.                                                        #
 		#############################################################################
 
-		# Split sentence by word and convert to list
-		# Lowercase all letters/words
-		# normed_line = ""
-		# for word in text.split():
-		# 	word = word.lower()
-		# 	normed_line += word + " "
-		# return normed_line.strip()
 		return text
 
 
@@ -225,6 +227,42 @@ class Chatbot:
 		#############################################################################
 
 		return text
+
+	def toLower(self, text):
+		# Split sentence by word and convert to list
+		# Lowercase all letters/words
+		normed_line = ""
+		for word in text.split():
+			word = word.lower()
+			normed_line += word + " "
+		return normed_line.strip()
+
+
+	def normalize(self, text):
+		getVals = list([val for val in text if val.isalpha() or val.isnumeric() or val == ' ' or val == ','])
+		result = "".join(getVals)
+		return result
+
+	def levenshtein(self, s, t):
+	    if s == t:
+	        return 0
+	    if len(s) == 0:
+	        return len(t)
+	    if len(t) == 0:
+	        return len(s)
+
+	    v0 = list(range(len(t) + 1))
+	    v1 = [None] * (len(t) + 1)
+
+	    for i in range(len(s)):
+	        v1[0] = i + 1
+	        for j in range(len(t)):
+	            cost = 0 if s[i] == t[j] else 2
+	            v1[j + 1] = min(v1[j] + 1, v0[j + 1] + 1, v0[j] + cost)
+	        for j in range(len(v0)):
+	            v0[j] = v1[j]
+
+	    return v1[len(t)]
 
 	def extract_titles(self, preprocessed_input):
 		"""Extract potential movie titles from a line of pre-processed text.
@@ -245,34 +283,34 @@ class Chatbot:
 		:param preprocessed_input: a user-supplied line of text that has been pre-processed with preprocess()
 		:returns: list of movie titles that are potentially in the text
 		"""
-		patterns = [
-			# '"([\w ]+\'\w?)"' ,
-			# '"([\w ]+)"' ,
-			# '"([\w]+[\'][\w]+)"'
-			'"([^"]*)"'
-		]
+		# patterns = [
+		# 	# '"([\w ]+\'\w?)"' ,
+		# 	# '"([\w ]+)"' ,
+		# 	# '"([\w]+[\'][\w]+)"'
+		# 	'"([^"]*)"'
+		# ]
 
 		pattern = '"([^"]*)"'
-
 		matches = re.findall(pattern, preprocessed_input)
-		for m in matches:
-			self.buildUserDict(m)
 		return matches
 
 
 	#Takes a found movie given by user and adds to movie->year dict.
 	#If year is not given, year = -1
-	def buildUserDict(self, input_movie):
+	def matchMovieToYear(self, input_movie):
+		input_movie_year = {} # {original movie title : [fixed title, year]}
+		movie_year = [] # [fixed title, year]
 		year = self.checkYearHelper(input_movie)
+		fixed_movie = input_movie
 		if year != None:
-			input_movie = input_movie.replace(year, '')  #remove year
-			input_movie = input_movie.strip()
-		input_movie = self.fixedTitles(input_movie)  #Rearranges first article word
-		if year != None:
-			self.movieToYear[input_movie] = year
+			fixed_movie = input_movie.replace(year, '')  #remove year
+			fixed_movie = fixed_movie.strip()
 		else:
-			self.movieToYear[input_movie] = -1
-		return input_movie
+			year = -1
+		movie_year.append(self.fixedTitles(fixed_movie))  #Rearranges first article word
+		movie_year.append(year)
+		input_movie_year[input_movie] = movie_year
+		return input_movie_year
 
 
 	#Checks if a year is given by user. Returns year
@@ -291,9 +329,16 @@ class Chatbot:
 			title = words[1] + ", " + words[0]
 		return title
 
+	def checkForeign(self, input_movie):
+		title = None
+		p = '(\([A-Za-z, ]+\))'
+		c = re.search(p, input_movie)
+		if c != None:
+			title = c.group(1)
+		return title
 
 	def find_movies_by_title(self, title):
-		""" Given a movie title, return a list of indices of matching movies.
+		""" Given a movie title, return a list of indices of matching movies. 
 
 		- If no movies are found that match the given title, return an empty list.
 		- If multiple movies are found that match the given title, return a list
@@ -308,22 +353,89 @@ class Chatbot:
 		:param title: a string containing a movie title
 		:returns: a list of indices of matching movies
 		"""
+
+
+		# input_title = self.matchMovieToYear(title) #Returns {title : [fixed title, year]}
+
+		# movies = []
+		# for i,t in enumerate(self.titles):
+		# 	t_title = t[0]
+		# 	t_title = self.matchMovieToYear(t_title) 
+
+		# 	if input_title[title][0] == t_title[t[0]][0]:
+		# 		if input_title[title][1] == t_title[t[0]][1]:
+		# 			movies.append(i)
+		# 		elif input_title[title][1] == -1:
+		# 			movies.append(i)
+
+		# 	elif title == t[0]:
+		# 		t_year = self.checkYearHelper(t[0])
+		# 		if input_title[title][1] == t_year:
+		# 			movies.append(i)
+		# 		elif input_title[title][1] == -1:
+		# 			movies.append(i)
+		# return movies
+
+			# elif self.checkForeign(t_low) != None:
+			# 	temp_token = token_title[1:]
+			# 	new_n = n-1
+			# 	for i,token in enumerate(t_norm):
+			# 		if "," in token:
+			# 			t_norm[i] = token.replace(',' , '')
+			# 	if any(temp_token == t_norm[i:i + new_n] for i in range(len(t_norm)-new_n + 1)):
+			# 		if input_title[title][1] == t_title[t_low][1]:
+			# 			movies.append(i)
+			# 		elif input_title[title][1] == -1:
+			# 			print("here")
+			# 			movies.append(i)
+
+		input_title = self.matchMovieToYear(title) #Returns {title : [fixed title, year]}
+
+		title_low = self.toLower(title)
+		input_low = self.matchMovieToYear(title_low)
+		token_title = input_low[title_low][0].split()
+		n = len(token_title)
+
 		movies = []
 		for i,t in enumerate(self.titles):
-			t_title = t[0]
-			t_year = self.checkYearHelper(t_title)
-			if t_year != None:
-				t_title = t_title.replace(t_year, '')  #remove year
-				t_title = t_title.strip()
-			new_t = self.fixedTitles(t_title)
-			if title == new_t:
-				if self.movieToYear[title] == t_year:
+			t_orig = self.matchMovieToYear(t[0])
+
+			t_low = self.toLower(t[0])
+			t_title = self.matchMovieToYear(t_low)
+			token_t = t_title[t_low][0].split()
+
+			t_norm = self.normalize(t_title[t_low][0])
+			t_norm = t_norm.split()
+
+			if any(token_title == token_t[i:i + n] for i in range(len(token_t)-n + 1)) or any(token_title == t_norm[i:i + n] for i in range(len(t_norm)-n + 1)):
+				if input_low[title_low][1] == t_title[t_low][1]:
 					movies.append(i)
-				elif self.movieToYear[title] == -1:
+				elif input_low[title_low][1] == -1:
 					movies.append(i)
+			elif input_title[title][0] == t_orig[t[0]][0]:
+				if input_title[title][1] == t_orig[t[0]][1]:
+					movies.append(i)
+				elif input_title[title][1] == -1:
+					movies.append(i)
+			elif title == t[0]:
+				t_year = self.checkYearHelper(t[0])
+				if input_title[title][1] == t_year:
+					movies.append(i)
+				elif input_title[title][1] == -1:
+					movies.append(i)
+
+			elif self.checkForeign(t_low) != None:
+				foreign = self.checkForeign(t_low)[1:-1]
+				token_foreign = foreign.split()
+
+				fixed_foreign = self.fixedTitles(title_low)
+				fixed_token = fixed_foreign.split()
+				print(foreign)
+
+				if any(fixed_token == token_foreign[i:i + n] for i in range(len(token_t)-n + 1)) or any(token_title == t_norm[i:i + n] for i in range(len(t_norm)-n + 1)):
+					movies.append(i)
+
 		return movies
-
-
 
 
 	def removeTitleHelper(self, input_text):
@@ -489,8 +601,27 @@ class Chatbot:
 		:param max_distance: the maximum edit distance to search for
 		:returns: a list of movie indices with titles closest to the given title and within edit distance max_distance
 		"""
+		title_low = self.toLower(title)
+		input_low = self.matchMovieToYear(title_low)
+		closest = max_distance
 
-		pass
+		# print("input", input_title)
+		# print("tokenized", token_title)
+
+		movies = []
+		for i,t in enumerate(self.titles):
+
+			t_low = self.toLower(t[0])
+			t_title = self.matchMovieToYear(t_low)
+
+			dist = self.levenshtein(input_low[title_low][0], t_title[t_low][0])
+			if dist <= closest:
+				print(dist)
+				if dist < closest:
+					movies = []
+					closest = dist
+				movies.append(i)
+		return movies
 
 	def disambiguate(self, clarification, candidates):
 		"""Creative Feature: Given a list of movies that the user could be talking about
@@ -511,7 +642,25 @@ class Chatbot:
 		:param candidates: a list of movie indices
 		:returns: a list of indices corresponding to the movies identified by the clarification
 		"""
-		pass
+		numbers = ['first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh', 'eight', 'ninth', 'tenth']
+		suggest = []
+
+
+		for word in clarification.split():
+			for movie in candidates:
+				if word.isnumeric():
+					if int(word) == movie:
+						suggest.append(movie)
+					elif int(word) < len(candidates)-1:
+						suggest.append(candidates[int(word)-1])
+					elif int(word) == int(self.checkYearHelper(self.titles[movie][0])[1:-1]):
+						suggest.append(movie)
+				elif word in numbers:
+					suggest.append(candidates[numbers.index(word)])
+		if len(suggest) == 0:
+			suggest.extend(self.find_movies_by_title(clarification))
+
+		return suggest
 
 	#############################################################################
 	# 3. Movie Recommendation helper functions                                  #

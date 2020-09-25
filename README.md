@@ -4,8 +4,8 @@ This project implements a "ChatBot" which reads in inputs from a user regarding 
 
 ## Features
 
-FEATURE - Alternate/foreign titles: YES
-FEATURE - Disambiguation (part 1): YES
+FEATURE - Alternate/foreign titles: YES \n
+FEATURE - Disambiguation (part 1): YES \n
 FEATURE - Fine-grained sentiment extraction: YES
 FEATURE - Spell-correcting fallback for find_movies_by_title: YES
 FEATURE - Disambiguation (part 2): YES
